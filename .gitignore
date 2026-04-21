@@ -1,0 +1,82 @@
+# ------------------------------
+# OS / Editor
+# ------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# ------------------------------
+# Environment / Secrets
+# ------------------------------
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.jks
+
+# Firebase secrets and config files that should not be pushed
+backend/serviceAccountKey.json
+**/serviceAccountKey.json
+**/*service-account*.json
+**/*firebase-adminsdk*.json
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+
+# ------------------------------
+# Python / FastAPI
+# ------------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ------------------------------
+# MongoDB / local data dumps
+# ------------------------------
+dump/
+*.bson
+*.metadata.json
+
+# ------------------------------
+# Flutter / Dart
+# ------------------------------
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub/
+frontend/.pub-cache/
+frontend/build/
+frontend/coverage/
+
+# Flutter generated platform files
+frontend/**/Flutter/ephemeral/
+frontend/**/flutter_export_environment.sh
+frontend/**/Generated.xcconfig
+frontend/**/Flutter-Generated.xcconfig
+
+# ------------------------------
+# Logs
+# ------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
