@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from db.database import classrooms_collection, exam_sessions_collection
+from db.database import classrooms_collection, exam_sessions_collection, notifications_collection
 from models.exam_session import ExamSession
 
 
@@ -72,3 +72,15 @@ def get_session_details(session_id: str) -> Optional[Dict[str, Any]]:
     if not session_doc:
         return None
     return _serialize_exam_session(session_doc)
+
+
+def get_classroom_exam_history(classroom_id: str) -> List[Dict[str, Any]]:
+    sessions = exam_sessions_collection.find({"classroom_id": classroom_id}).sort("start_time", -1)
+    history: List[Dict[str, Any]] = []
+    for session_doc in sessions:
+        session = _serialize_exam_session(session_doc)
+        alerts_count = notifications_collection.count_documents({"session_id": session["session_id"]})
+        session["total_alerts_count"] = alerts_count
+        session["suspicious_activity_count"] = alerts_count
+        history.append(session)
+    return history

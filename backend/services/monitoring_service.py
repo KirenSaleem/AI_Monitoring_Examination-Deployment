@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List
+from uuid import uuid4
+import traceback
+
+from db.database import notifications_collection
+from services.detection_service import analyze_frame
+
+ALERTS_DIR = Path("storage/alerts")
+ALERTS_URL_PREFIX = "/alerts"
+
+
+def _serialize_notification(notification_doc: Dict[str, Any]) -> Dict[str, Any]:
+    notification_doc.pop("_id", None)
+    created_at = notification_doc.get("created_at")
+    if isinstance(created_at, datetime):
+        notification_doc["created_at"] = created_at.isoformat()
+    frame_path = notification_doc.get("frame_path")
+    if isinstance(frame_path, str) and frame_path:
+        file_name = Path(frame_path).name
+        notification_doc["evidence_image_url"] = f"{ALERTS_URL_PREFIX}/{file_name}"
+    return notification_doc
+
+
+def check_monitoring_frame(frame_bytes: bytes, classroom_id: str, session_id: str) -> Dict[str, Any]:
+    print("check_monitoring_frame called")
+    print(f"classroom_id={classroom_id}, session_id={session_id}, frame_size={len(frame_bytes)} bytes")
+    result = analyze_frame(frame_bytes)
+    if not result.get("success", True):
+        print("Detection service returned failure.")
+        return {
+            "success": False,
+            "cheating_detected": False,
+            "alert_type": None,
+            "confidence": 0.0,
+            "message": "Frame processed but AI detection failed.",
+            "error": result.get("error", "Unknown detection error"),
+        }
+
+    if not result["cheating_detected"]:
+        return {
+            "success": True,
+            "cheating_detected": False,
+            "alert_type": None,
+            "confidence": 0.0,
+            "message": result["message"],
+            "error": None,
+        }
+
+    try:
+        print("Saving suspicious frame...")
+        ALERTS_DIR.mkdir(parents=True, exist_ok=True)
+        notification_id = str(uuid4())
+        frame_name = f"{session_id}_{notification_id}.jpg"
+        frame_path = ALERTS_DIR / frame_name
+        frame_path.write_bytes(result["annotated_image_bytes"])
+
+        notification = {
+            "id": notification_id,
+            "classroom_id": classroom_id,
+            "session_id": session_id,
+            "alert_type": result["alert_type"],
+            "confidence": result["confidence"],
+            "frame_path": str(frame_path),
+            "status": "unread",
+            "created_at": datetime.utcnow(),
+        }
+        notifications_collection.insert_one(notification)
+        print("MongoDB notification inserted")
+    except Exception as exc:
+        print("Failed while saving suspicious frame or Mongo insert.")
+        traceback.print_exc()
+        return {
+            "success": False,
+            "cheating_detected": True,
+            "alert_type": result["alert_type"],
+            "confidence": result["confidence"],
+            "message": result["message"],
+            "error": f"Failed to store suspicious frame/notification: {exc}",
+        }
+
+    return {
+        "success": True,
+        "cheating_detected": True,
+        "alert_type": result["alert_type"],
+        "confidence": result["confidence"],
+        "message": result["message"],
+        "error": None,
+    }
+
+
+def get_session_alerts(session_id: str) -> List[Dict[str, Any]]:
+    docs = notifications_collection.find({"session_id": session_id}).sort("created_at", -1)
+    return [_serialize_notification(doc) for doc in docs]

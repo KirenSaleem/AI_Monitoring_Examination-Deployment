@@ -7,6 +7,7 @@ DB_NAME = "examguard_db"
 USERS_COLLECTION = "users"
 CLASSROOMS_COLLECTION = "classrooms"
 EXAM_SESSIONS_COLLECTION = "exam_sessions"
+NOTIFICATIONS_COLLECTION = "notifications"
 
 try:
     client = MongoClient(MONGO_URL)
@@ -17,6 +18,12 @@ try:
     users_collection: Collection = database[USERS_COLLECTION]
     classrooms_collection: Collection = database[CLASSROOMS_COLLECTION]
     exam_sessions_collection: Collection = database[EXAM_SESSIONS_COLLECTION]
+    notifications_collection: Collection = database[NOTIFICATIONS_COLLECTION]
+
+    existing_collections = database.list_collection_names()
+    if NOTIFICATIONS_COLLECTION not in existing_collections:
+        database.create_collection(NOTIFICATIONS_COLLECTION)
+        print("MongoDB notifications collection created")
 
 except Exception as e:
     print("MongoDB connection error:", e)
