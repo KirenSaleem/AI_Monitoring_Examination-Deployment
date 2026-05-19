@@ -1,98 +1,138 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import traceback
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 try:
-    from transformers import pipeline
-except ImportError:  # pragma: no cover - optional dependency
-    pipeline = None
+    from ultralytics import YOLO
+except ImportError:
+    YOLO = None
 
-_detector = None
+try:
+    import torch
+
+    _TORCH_AVAILABLE = True
+except ImportError:
+    _TORCH_AVAILABLE = False
+
+_model = None
+
+_MODEL_NAME = "yolov8n.pt"
+_INFERENCE_SIZE = 640
+_CONFIDENCE = 0.18
+
+# COCO class ids — only phone & book (faster than scanning all 80 classes)
+_PHONE_CLASS_ID = 67
+_BOOK_CLASS_ID = 73
+_SUSPICIOUS_CLASS_IDS = [_PHONE_CLASS_ID, _BOOK_CLASS_ID]
 
 SUSPICIOUS_LABELS = {
     "cell phone": "mobile_detected",
-    "mobile phone": "mobile_detected",
-    "phone": "mobile_detected",
     "book": "book_detected",
 }
 
 
-def _get_detector():
-    global _detector
-    if _detector is not None:
-        return _detector
-    if pipeline is None:
-        raise RuntimeError(
-            "transformers is not installed. Install with: pip install transformers torch pillow"
-        )
-    print("Loading object detection model...")
-    _detector = pipeline("object-detection", model="facebook/detr-resnet-50")
-    print("Model loaded successfully.")
-    return _detector
+def _get_model():
+    global _model
+    if _model is not None:
+        return _model
+    if YOLO is None:
+        raise RuntimeError("Install ultralytics: pip install ultralytics pillow")
+    print(f"Loading {_MODEL_NAME}...")
+    _model = YOLO(_MODEL_NAME)
+    print("YOLO loaded.")
+    return _model
 
 
-def _pick_best_suspicious(detections: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    best_match: Optional[Dict[str, Any]] = None
-    for item in detections:
-        label = str(item.get("label", "")).lower()
-        score = float(item.get("score", 0.0))
-        alert_type = SUSPICIOUS_LABELS.get(label)
-        if not alert_type:
-            continue
-        if best_match is None or score > float(best_match.get("score", 0.0)):
-            best_match = {"label": label, "score": score, "box": item.get("box"), "alert_type": alert_type}
-    return best_match
+def _clamp_box(x1: float, y1: float, x2: float, y2: float, w: int, h: int) -> Tuple[int, int, int, int]:
+    ix1 = max(0, min(int(round(x1)), w - 1))
+    iy1 = max(0, min(int(round(y1)), h - 1))
+    ix2 = max(ix1 + 1, min(int(round(x2)), w))
+    iy2 = max(iy1 + 1, min(int(round(y2)), h))
+    return ix1, iy1, ix2, iy2
 
 
 def analyze_frame(frame_bytes: bytes) -> Dict[str, Any]:
+    """Detect only cell phone & book; draw boxes only on suspicious objects."""
     try:
-        print("Frame received")
-        print("Opening image...")
         image = Image.open(BytesIO(frame_bytes)).convert("RGB")
-        print("Image opened successfully.")
+        image = ImageOps.exif_transpose(image)
+        orig_w, orig_h = image.size
 
-        print("Running AI detection...")
-        detector = _get_detector()
-        detections = detector(image)
-        print(f"Detection complete. Total detections: {len(detections)}")
+        model = _get_model()
+        predict_kwargs = {
+            "imgsz": _INFERENCE_SIZE,
+            "conf": _CONFIDENCE,
+            "classes": _SUSPICIOUS_CLASS_IDS,
+            "verbose": False,
+        }
 
-        best = _pick_best_suspicious(detections)
-        if not best:
-            return {
-                "success": True,
-                "cheating_detected": False,
-                "alert_type": None,
-                "confidence": 0.0,
-                "message": "No suspicious object detected.",
-                "annotated_image_bytes": None,
-                "error": None,
-            }
+        if _TORCH_AVAILABLE:
+            with torch.inference_mode():
+                results = model.predict(image, **predict_kwargs)
+        else:
+            results = model.predict(image, **predict_kwargs)
 
-        box = best.get("box") or {}
-        x1 = int(box.get("xmin", 0))
-        y1 = int(box.get("ymin", 0))
-        x2 = int(box.get("xmax", 0))
-        y2 = int(box.get("ymax", 0))
+        result = results[0]
+        boxes = result.boxes
 
-        draw = ImageDraw.Draw(image)
-        draw.rectangle([(x1, y1), (x2, y2)], outline="red", width=4)
-        draw.text((x1, max(0, y1 - 20)), f"{best['label']} {best['score']:.2f}", fill="red")
+        cheating_detected = False
+        alert_type: Optional[str] = None
+        highest_confidence = 0.0
+        best_box: Optional[Tuple[int, int, int, int]] = None
+        best_label = ""
 
-        output = BytesIO()
-        image.save(output, format="JPEG")
+        if boxes is not None and len(boxes) > 0:
+            names = result.names
+            xyxy_list = boxes.xyxy.cpu().tolist()
+            conf_list = boxes.conf.cpu().tolist()
+            cls_list = [int(c) for c in boxes.cls.cpu().tolist()]
 
-        readable = "Mobile detected" if best["alert_type"] == "mobile_detected" else "Book/notes detected"
+            for (x1, y1, x2, y2), score, cls_id in zip(xyxy_list, conf_list, cls_list):
+                label = str(names.get(int(cls_id), "")).lower()
+                alert = SUSPICIOUS_LABELS.get(label)
+                if not alert:
+                    continue
+
+                conf = float(score)
+                if conf > highest_confidence:
+                    highest_confidence = conf
+                    alert_type = alert
+                    best_label = label
+                    best_box = _clamp_box(x1, y1, x2, y2, orig_w, orig_h)
+
+            cheating_detected = best_box is not None
+
+        annotated_bytes: Optional[bytes] = None
+        if cheating_detected and best_box is not None:
+            draw = ImageDraw.Draw(image)
+            bx1, by1, bx2, by2 = best_box
+            stroke = max(2, int(min(orig_w, orig_h) / 200))
+            draw.rectangle([(bx1, by1), (bx2, by2)], outline="red", width=stroke)
+            draw.text((bx1, max(0, by1 - 18)), f"{best_label} {highest_confidence:.2f}", fill="red")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=85)
+            annotated_bytes = output.getvalue()
+
+        if cheating_detected:
+            message = (
+                "Mobile detected"
+                if alert_type == "mobile_detected"
+                else "Book/notes detected"
+            )
+        else:
+            message = "No suspicious object detected."
+
         return {
             "success": True,
-            "cheating_detected": True,
-            "alert_type": best["alert_type"],
-            "confidence": round(float(best["score"]), 4),
-            "message": readable,
-            "annotated_image_bytes": output.getvalue(),
+            "cheating_detected": cheating_detected,
+            "alert_type": alert_type,
+            "confidence": round(highest_confidence, 4),
+            "message": message,
+            "annotated_image_bytes": annotated_bytes,
             "error": None,
         }
     except Exception as exc:

@@ -5,6 +5,7 @@ from uuid import uuid4
 from db.database import classrooms_collection, exam_sessions_collection, notifications_collection
 from models.exam_session import ExamSession
 from services.student_service import get_student_ids_for_classroom
+from utils.datetime_utils import now
 
 
 def _serialize_exam_session(session_doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -38,14 +39,16 @@ def start_exam_session(classroom_id: str, exam_name: str, started_by: str) -> Di
         raise ValueError("Only classroom teacher can start monitoring.")
 
     monitored_students = get_student_ids_for_classroom(classroom_id)
+    started = now()
 
     session = ExamSession(
         session_id=str(uuid4()),
         classroom_id=classroom_id,
         exam_name=exam_name,
         started_by=started_by,
-        start_time=datetime.utcnow(),
+        start_time=started,
         monitored_students=monitored_students,
+        created_at=started,
     )
     session_dict = session.model_dump()
     exam_sessions_collection.insert_one(session_dict)
@@ -64,9 +67,10 @@ def end_exam_session(session_id: str, ended_by: str) -> Dict[str, Any]:
     if session_doc.get("status") != "active":
         raise ValueError("This session is not active.")
 
+    end_time = now()
     exam_sessions_collection.update_one(
         {"session_id": session_id},
-        {"$set": {"status": "completed", "end_time": datetime.utcnow()}},
+        {"$set": {"status": "completed", "end_time": end_time}},
     )
     updated_doc = exam_sessions_collection.find_one({"session_id": session_id})
     if not updated_doc:

@@ -8,6 +8,7 @@ import traceback
 
 from db.database import notifications_collection
 from services.detection_service import analyze_frame
+from utils.datetime_utils import now, now_iso
 
 ALERTS_DIR = Path("storage/alerts")
 ALERTS_URL_PREFIX = "/alerts"
@@ -15,9 +16,10 @@ ALERTS_URL_PREFIX = "/alerts"
 
 def _serialize_notification(notification_doc: Dict[str, Any]) -> Dict[str, Any]:
     notification_doc.pop("_id", None)
-    created_at = notification_doc.get("created_at")
-    if isinstance(created_at, datetime):
-        notification_doc["created_at"] = created_at.isoformat()
+    for key in ("created_at", "frame_captured_at"):
+        value = notification_doc.get(key)
+        if isinstance(value, datetime):
+            notification_doc[key] = value.isoformat()
     frame_path = notification_doc.get("frame_path")
     if isinstance(frame_path, str) and frame_path:
         file_name = Path(frame_path).name
@@ -26,37 +28,37 @@ def _serialize_notification(notification_doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def check_monitoring_frame(frame_bytes: bytes, classroom_id: str, session_id: str) -> Dict[str, Any]:
-    print("check_monitoring_frame called")
-    print(f"classroom_id={classroom_id}, session_id={session_id}, frame_size={len(frame_bytes)} bytes")
+    captured_at = now()
+    captured_iso = now_iso()
     result = analyze_frame(frame_bytes)
-    if not result.get("success", True):
-        print("Detection service returned failure.")
-        return {
-            "success": False,
-            "cheating_detected": False,
-            "alert_type": None,
-            "confidence": 0.0,
-            "message": "Frame processed but AI detection failed.",
-            "error": result.get("error", "Unknown detection error"),
-        }
 
-    if not result["cheating_detected"]:
-        return {
-            "success": True,
-            "cheating_detected": False,
-            "alert_type": None,
-            "confidence": 0.0,
-            "message": result["message"],
-            "error": None,
-        }
+    base = {
+        "success": result.get("success", True),
+        "cheating_detected": bool(result.get("cheating_detected", False)),
+        "alert_type": result.get("alert_type"),
+        "confidence": float(result.get("confidence") or 0.0),
+        "message": result.get("message", ""),
+        "error": result.get("error"),
+        "captured_at": captured_iso,
+    }
+
+    if not result.get("success", True):
+        base["success"] = False
+        base["message"] = "Frame processed but AI detection failed."
+        base["error"] = result.get("error", "Unknown detection error")
+        return base
+
+    if not result.get("cheating_detected"):
+        return base
 
     try:
-        print("Saving suspicious frame...")
         ALERTS_DIR.mkdir(parents=True, exist_ok=True)
         notification_id = str(uuid4())
         frame_name = f"{session_id}_{notification_id}.jpg"
         frame_path = ALERTS_DIR / frame_name
-        frame_path.write_bytes(result["annotated_image_bytes"])
+        evidence_bytes = result.get("annotated_image_bytes")
+        if evidence_bytes:
+            frame_path.write_bytes(evidence_bytes)
 
         notification = {
             "id": notification_id,
@@ -66,30 +68,18 @@ def check_monitoring_frame(frame_bytes: bytes, classroom_id: str, session_id: st
             "confidence": result["confidence"],
             "frame_path": str(frame_path),
             "status": "unread",
-            "created_at": datetime.utcnow(),
+            "created_at": captured_at,
+            "frame_captured_at": captured_at,
         }
         notifications_collection.insert_one(notification)
-        print("MongoDB notification inserted")
     except Exception as exc:
         print("Failed while saving suspicious frame or Mongo insert.")
         traceback.print_exc()
-        return {
-            "success": False,
-            "cheating_detected": True,
-            "alert_type": result["alert_type"],
-            "confidence": result["confidence"],
-            "message": result["message"],
-            "error": f"Failed to store suspicious frame/notification: {exc}",
-        }
+        base["success"] = False
+        base["error"] = f"Failed to store suspicious frame/notification: {exc}"
+        return base
 
-    return {
-        "success": True,
-        "cheating_detected": True,
-        "alert_type": result["alert_type"],
-        "confidence": result["confidence"],
-        "message": result["message"],
-        "error": None,
-    }
+    return base
 
 
 def get_session_alerts(session_id: str) -> List[Dict[str, Any]]:

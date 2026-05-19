@@ -4,6 +4,4 @@ pymongo
 pydantic
 python-multipart
 pillow
-transformers
-torch
-timm
+ultralytics>=8.0.0

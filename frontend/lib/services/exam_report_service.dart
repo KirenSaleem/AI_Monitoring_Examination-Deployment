@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../utils/date_time_format.dart';
 import 'api_service.dart';
 
 /// Builds a professional PDF report for a completed exam session.
@@ -18,13 +19,13 @@ class ExamReportService {
     required List<Map<String, dynamic>> alerts,
   }) async {
     final examName = session['exam_name'] as String? ?? 'Exam';
-    final startTime = _formatDateTime(session['start_time'] as String?);
-    final endTime = _formatDateTime(session['end_time'] as String?);
+    final startTime = formatLocalDateTime(session['start_time'] as String?);
+    final endTime = formatLocalDateTime(session['end_time'] as String?);
     final alertCount = alerts.length;
     final suspiciousCount = alertCount;
 
     final pdf = pw.Document();
-    final generatedAt = _formatDateTime(DateTime.now().toIso8601String());
+    final generatedAt = formatLocalDateTime(DateTime.now().toIso8601String());
 
     pdf.addPage(
       pw.MultiPage(
@@ -59,7 +60,7 @@ class ExamReportService {
                 final a = alerts[i];
                 return [
                   '${i + 1}',
-                  _formatDateTime(a['created_at'] as String?),
+                  formatLocalDateTime(a['created_at'] as String?),
                   _formatAlertType(a['alert_type'] as String?),
                   _confidenceLabel(a['confidence']),
                 ];
@@ -91,7 +92,7 @@ class ExamReportService {
                 ),
                 pw.SizedBox(height: 6),
                 pw.Text(
-                  'Time: ${_formatDateTime(alert['created_at'] as String?)}',
+                  'Time: ${formatLocalDateTime(alert['created_at'] as String?)}',
                   style: const pw.TextStyle(fontSize: 10),
                 ),
                 pw.Text(
@@ -209,17 +210,6 @@ class ExamReportService {
       return null;
     }
     return null;
-  }
-
-  String _formatDateTime(String? raw) {
-    if (raw == null || raw.isEmpty) return '-';
-    final dt = DateTime.tryParse(raw)?.toLocal();
-    if (dt == null) return raw;
-    final d = dt.day.toString().padLeft(2, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final h = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$d/$m/${dt.year} $h:$min';
   }
 
   String _formatAlertType(String? raw) {

@@ -1,8 +1,11 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
 
 import '../services/api_error_handler.dart';
 import '../services/api_service.dart';
+import '../utils/session_timer_utils.dart';
 import 'monitoring_camera_screen.dart';
 
 class MonitoringDashboard extends StatefulWidget {
@@ -31,12 +34,36 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
   bool _isLoadingAlerts = false;
   late Map<String, dynamic> _session;
   List<Map<String, dynamic>> _alerts = [];
+  Timer? _uiTick;
+  Timer? _alertPoll;
 
   @override
   void initState() {
     super.initState();
     _session = Map<String, dynamic>.from(widget.session);
     _loadAlerts();
+    final status = (_session['status'] as String?) ?? '';
+    if (status == 'active') {
+      _uiTick = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+      _alertPoll = Timer.periodic(const Duration(seconds: 8), (_) => _loadAlerts());
+    }
+  }
+
+  @override
+  void dispose() {
+    _uiTick?.cancel();
+    _alertPoll?.cancel();
+    super.dispose();
+  }
+
+  Duration _sessionElapsed() {
+    return SessionTimer.elapsed(
+      startTimeIso: _session['start_time'] as String?,
+      endTimeIso: _session['end_time'] as String?,
+      status: _session['status'] as String?,
+    );
   }
 
   Future<void> _loadAlerts() async {
@@ -81,6 +108,8 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
         endedBy: widget.teacherUid,
       );
       if (!mounted) return;
+      _uiTick?.cancel();
+      _alertPoll?.cancel();
       setState(() => _session = updated);
       _showMessage('Monitoring ended successfully.');
       Navigator.pop(context, true);
@@ -250,6 +279,57 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            if (isActive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.outline.withValues(alpha: 0.12)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.timer_outlined, color: colorScheme.primary, size: 22),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Running Timer', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        Text(
+                          SessionTimer.formatHms(_sessionElapsed()),
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Total Alerts',
+                          style: TextStyle(fontSize: 11, color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                        ),
+                        Text(
+                          '${_alerts.length}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
             const SizedBox(height: 16),
 
             // Camera button
@@ -278,6 +358,10 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
                         builder: (_) => MonitoringCameraScreen(
                           classroomId: widget.classroomId,
                           sessionId: _session['session_id'] as String,
+                          sessionStartTime: _session['start_time'] as String?,
+                          sessionEndTime: _session['end_time'] as String?,
+                          sessionStatus: status,
+                          initialAlertCount: _alerts.length,
                         ),
                       ),
                     ).then((_) => _loadAlerts()),
@@ -302,7 +386,7 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
                                 Text('Open Live Camera',
                                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                                 SizedBox(height: 1),
-                                Text('Monitor student activity in real time',
+                                Text('Live preview · phone & book detection ~1/sec',
                                     style: TextStyle(fontSize: 12, color: Colors.grey)),
                               ],
                             ),

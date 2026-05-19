@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_error_handler.dart';
 import '../services/api_service.dart';
+import '../utils/date_time_format.dart';
 import 'exam_session_detail_screen.dart';
 import 'monitoring_dashboard.dart';
 
@@ -63,17 +64,6 @@ class _ExamHistoryScreenState extends State<ExamHistoryScreen> {
     if (s == 'active') return 'Monitoring Active';
     if (s == 'completed' || s == 'ended') return 'Completed';
     return status ?? '-';
-  }
-
-  String _formatDateTime(String? raw) {
-    if (raw == null || raw.isEmpty) return '-';
-    final dt = DateTime.tryParse(raw)?.toLocal();
-    if (dt == null) return raw;
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$d/$m/${dt.year}  $hour:$min';
   }
 
   Color _statusColor(String? status) {
@@ -301,7 +291,7 @@ class _ExamHistoryScreenState extends State<ExamHistoryScreen> {
                                   _timeRow(
                                     Icons.play_arrow_rounded,
                                     'Start',
-                                    _formatDateTime(exam['start_time'] as String?),
+                                    formatLocalDateTime(exam['start_time'] as String?),
                                     colorScheme,
                                   ),
                                   const SizedBox(height: 6),
@@ -310,7 +300,7 @@ class _ExamHistoryScreenState extends State<ExamHistoryScreen> {
                                     'End',
                                     isActive
                                         ? 'In progress'
-                                        : _formatDateTime(exam['end_time'] as String?),
+                                        : formatLocalDateTime(exam['end_time'] as String?),
                                     colorScheme,
                                   ),
                                   const SizedBox(height: 12),

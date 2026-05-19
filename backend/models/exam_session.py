@@ -3,6 +3,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
+from utils.datetime_utils import now
+
 
 class ExamSession(BaseModel):
     session_id: str
@@ -13,7 +15,7 @@ class ExamSession(BaseModel):
     end_time: Optional[datetime] = None
     status: str = "active"
     monitored_students: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=now)
 
 
 class StartExamRequest(BaseModel):

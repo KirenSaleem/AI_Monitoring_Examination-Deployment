@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../services/api_error_handler.dart';
 import '../services/api_service.dart';
 import '../services/exam_report_service.dart';
+import '../utils/date_time_format.dart';
 
 /// Exam session details: summary, all monitoring alerts, and PDF report (completed exams).
 class ExamSessionDetailScreen extends StatefulWidget {
@@ -111,17 +112,6 @@ class _ExamSessionDetailScreenState extends State<ExamSessionDetailScreen> {
     } finally {
       if (mounted) setState(() => _isGeneratingPdf = false);
     }
-  }
-
-  String _formatDateTime(String? raw) {
-    if (raw == null || raw.isEmpty) return '-';
-    final dt = DateTime.tryParse(raw)?.toLocal();
-    if (dt == null) return raw;
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$d/$m/${dt.year}  $hour:$min';
   }
 
   String _formatAlertType(String? raw) {
@@ -249,8 +239,8 @@ class _ExamSessionDetailScreenState extends State<ExamSessionDetailScreen> {
         children: [
           _summaryRow(Icons.assignment_outlined, 'Exam', widget.examName),
           _summaryRow(Icons.class_outlined, 'Classroom', widget.classroomName),
-          _summaryRow(Icons.play_arrow_rounded, 'Start', _formatDateTime(widget.session['start_time'] as String?)),
-          _summaryRow(Icons.stop_rounded, 'End', _formatDateTime(widget.session['end_time'] as String?)),
+          _summaryRow(Icons.play_arrow_rounded, 'Start', formatLocalDateTime(widget.session['start_time'] as String?)),
+          _summaryRow(Icons.stop_rounded, 'End', formatLocalDateTime(widget.session['end_time'] as String?)),
           _summaryRow(Icons.notifications_rounded, 'Total Alerts', '${_alerts.length}'),
           _summaryRow(Icons.warning_rounded, 'Suspicious', '${_alerts.length}'),
         ],
@@ -341,7 +331,7 @@ class _ExamSessionDetailScreenState extends State<ExamSessionDetailScreen> {
                       Text(_formatAlertType(alert['alert_type'] as String?),
                           style: const TextStyle(fontWeight: FontWeight.w700)),
                       Text(
-                        _formatDateTime(alert['created_at'] as String?),
+                        formatLocalDateTime(alert['created_at'] as String?),
                         style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withOpacity(0.5)),
                       ),
                     ],
