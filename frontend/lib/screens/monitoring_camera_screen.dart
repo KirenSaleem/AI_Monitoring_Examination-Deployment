@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../utils/monitoring_frame_utils.dart';
 import '../utils/session_timer_utils.dart';
+import '../widgets/camera_zoom_controls.dart';
 
 /// Continuous live preview + ~1 AI scan/sec on downscaled frames (phone & book only).
 class MonitoringCameraScreen extends StatefulWidget {
@@ -42,6 +43,10 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
   String? _lastAlertText;
   int _framesAnalyzed = 0;
   int _alertCount = 0;
+  double _minZoom = 1.0;
+  double _maxZoom = 1.0;
+  double _currentZoom = 1.0;
+  double _pinchBaseZoom = 1.0;
 
   static const Duration _detectionInterval = Duration(seconds: 1);
 
@@ -85,6 +90,7 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
       await _cameraController!.initialize();
+      await _loadZoomLimits();
       if (!mounted) return;
       setState(() {
         _isReady = true;
@@ -97,6 +103,33 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
       if (!mounted) return;
       setState(() => _statusText = 'Camera initialization failed.');
       debugPrint('Camera init error: $e');
+    }
+  }
+
+  Future<void> _loadZoomLimits() async {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) return;
+    try {
+      _minZoom = await controller.getMinZoomLevel();
+      _maxZoom = await controller.getMaxZoomLevel();
+      _currentZoom = _minZoom;
+    } catch (e) {
+      debugPrint('[ExamGuard] Zoom limits: $e');
+      _minZoom = 1.0;
+      _maxZoom = 1.0;
+      _currentZoom = 1.0;
+    }
+  }
+
+  Future<void> _applyZoom(double level) async {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) return;
+    final clamped = level.clamp(_minZoom, _maxZoom);
+    try {
+      await controller.setZoomLevel(clamped);
+      if (mounted) setState(() => _currentZoom = clamped);
+    } catch (e) {
+      debugPrint('[ExamGuard] setZoomLevel: $e');
     }
   }
 
@@ -200,7 +233,13 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
               fit: StackFit.expand,
               children: [
                 _isReady && _cameraController != null
-                    ? CameraPreview(_cameraController!)
+                    ? GestureDetector(
+                        onScaleStart: (_) => _pinchBaseZoom = _currentZoom,
+                        onScaleUpdate: (details) {
+                          _applyZoom(_pinchBaseZoom * details.scale);
+                        },
+                        child: CameraPreview(_cameraController!),
+                      )
                     : Container(
                         color: Colors.black,
                         alignment: Alignment.center,
@@ -238,9 +277,23 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
                   right: 12,
                   child: _chip(Icons.sensors_rounded, '~1 AI scan/s'),
                 ),
-                if (_lastAlertText != null)
+                if (_isReady)
                   Positioned(
                     bottom: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: CameraZoomControls(
+                        currentZoom: _currentZoom,
+                        minZoom: _minZoom,
+                        maxZoom: _maxZoom,
+                        onZoomSelected: _applyZoom,
+                      ),
+                    ),
+                  ),
+                if (_lastAlertText != null)
+                  Positioned(
+                    bottom: 56,
                     left: 12,
                     right: 12,
                     child: Container(

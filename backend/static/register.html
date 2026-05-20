@@ -25,7 +25,7 @@
     h1 { font-size: 1.35rem; margin: 0 0 6px; }
     .sub { color: #64748b; font-size: 0.9rem; margin-bottom: 24px; }
     label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; }
-    input[type="text"], input[type="file"] {
+    input[type="text"] {
       width: 100%;
       padding: 12px 14px;
       border: 1px solid #cbd5e1;
@@ -35,13 +35,10 @@
     }
     input[readonly] { background: #f1f5f9; letter-spacing: 0.15em; font-weight: 700; }
     button {
-      width: 100%;
-      padding: 14px;
+      padding: 12px 14px;
       border: none;
       border-radius: 10px;
-      background: #4f46e5;
-      color: #fff;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 700;
       cursor: pointer;
     }
@@ -49,7 +46,66 @@
     .msg { margin-top: 16px; padding: 12px; border-radius: 8px; font-size: 0.9rem; display: none; }
     .msg.error { background: #fef2f2; color: #b91c1c; display: block; }
     .msg.success { background: #ecfdf5; color: #047857; display: block; }
-    .preview { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; margin-bottom: 12px; display: none; }
+
+    .photo-section { text-align: center; margin-bottom: 20px; }
+    .preview-wrap {
+      width: 112px;
+      height: 112px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 3px solid #c7d2fe;
+      background: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .preview-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+    .preview-wrap .placeholder {
+      font-size: 2.5rem;
+      color: #94a3b8;
+    }
+    .photo-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-gallery {
+      background: #4f46e5;
+      color: #fff;
+      flex: 1;
+      min-width: 140px;
+    }
+    .btn-camera {
+      background: #fff;
+      color: #4f46e5;
+      border: 2px solid #4f46e5;
+      flex: 1;
+      min-width: 140px;
+    }
+    .btn-submit {
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 1rem;
+    }
+    .hint { font-size: 0.75rem; color: #64748b; margin-top: 8px; }
+    .hidden-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+    }
   </style>
 </head>
 <body>
@@ -67,11 +123,35 @@
       <label for="roll_number">Roll Number</label>
       <input type="text" id="roll_number" name="roll_number" required placeholder="e.g. 2021-CS-001" />
 
-      <label for="profile_image">Profile Picture</label>
-      <img id="preview" class="preview" alt="Preview" />
-      <input type="file" id="profile_image" name="profile_image" accept="image/*" required />
+      <label>Profile Picture</label>
+      <div class="photo-section">
+        <div class="preview-wrap" id="previewWrap">
+          <span class="placeholder" id="placeholder">👤</span>
+          <img id="preview" alt="Profile preview" />
+        </div>
+        <div class="photo-actions">
+          <button type="button" class="btn-gallery" id="btnGallery">Choose from Gallery</button>
+          <button type="button" class="btn-camera" id="btnCamera">Take Photo</button>
+        </div>
+        <p class="hint">JPEG, PNG, or WebP · large photos are compressed automatically</p>
+        <!-- Gallery: broad accept for Android/iOS full library access -->
+        <input
+          type="file"
+          id="inputGallery"
+          class="hidden-input"
+          accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif,image/*"
+        />
+        <!-- Camera -->
+        <input
+          type="file"
+          id="inputCamera"
+          class="hidden-input"
+          accept="image/*"
+          capture="environment"
+        />
+      </div>
 
-      <button type="submit" id="submitBtn">Submit Registration</button>
+      <button type="submit" class="btn-submit" id="submitBtn">Submit Registration</button>
     </form>
     <div id="message" class="msg"></div>
   </div>
@@ -83,12 +163,107 @@
     codeInput.value = code;
 
     const preview = document.getElementById('preview');
-    document.getElementById('profile_image').addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      preview.src = URL.createObjectURL(file);
+    const placeholder = document.getElementById('placeholder');
+    const inputGallery = document.getElementById('inputGallery');
+    const inputCamera = document.getElementById('inputCamera');
+    const btnGallery = document.getElementById('btnGallery');
+    const btnCamera = document.getElementById('btnCamera');
+
+    let selectedFile = null;
+    let previewUrl = null;
+
+    function revokePreview() {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      }
+    }
+
+    function showPreview(file) {
+      revokePreview();
+      previewUrl = URL.createObjectURL(file);
+      preview.src = previewUrl;
       preview.style.display = 'block';
-    });
+      placeholder.style.display = 'none';
+    }
+
+    function clearPreview() {
+      revokePreview();
+      selectedFile = null;
+      preview.src = '';
+      preview.style.display = 'none';
+      placeholder.style.display = 'block';
+      inputGallery.value = '';
+      inputCamera.value = '';
+    }
+
+    async function compressImage(file, maxDim = 1024, quality = 0.82) {
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select a valid image file.');
+      }
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          let w = img.width;
+          let h = img.height;
+          const longest = Math.max(w, h);
+          if (longest > maxDim) {
+            const scale = maxDim / longest;
+            w = Math.round(w * scale);
+            h = Math.round(h * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('Could not process image. Try another photo.'));
+                return;
+              }
+              const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+              resolve(new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() }));
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('Invalid or unsupported image. Please choose another.'));
+        };
+        img.src = url;
+      });
+    }
+
+    async function handleFileInput(file) {
+      if (!file) return;
+      const msg = document.getElementById('message');
+      msg.className = 'msg';
+      msg.textContent = '';
+      try {
+        btnGallery.disabled = true;
+        btnCamera.disabled = true;
+        selectedFile = await compressImage(file);
+        showPreview(selectedFile);
+      } catch (err) {
+        clearPreview();
+        msg.className = 'msg error';
+        msg.textContent = err.message || 'Failed to load image.';
+      } finally {
+        btnGallery.disabled = false;
+        btnCamera.disabled = false;
+      }
+    }
+
+    btnGallery.addEventListener('click', () => inputGallery.click());
+    btnCamera.addEventListener('click', () => inputCamera.click());
+    inputGallery.addEventListener('change', (e) => handleFileInput(e.target.files[0]));
+    inputCamera.addEventListener('change', (e) => handleFileInput(e.target.files[0]));
 
     const form = document.getElementById('regForm');
     const msg = document.getElementById('message');
@@ -107,7 +282,19 @@
         return;
       }
 
-      const fd = new FormData(form);
+      if (!selectedFile) {
+        msg.className = 'msg error';
+        msg.textContent = 'Please choose a profile picture from gallery or camera.';
+        btn.disabled = false;
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('classroom_code', codeInput.value.trim());
+      fd.append('name', document.getElementById('name').value.trim());
+      fd.append('roll_number', document.getElementById('roll_number').value.trim());
+      fd.append('profile_image', selectedFile, selectedFile.name);
+
       try {
         const res = await fetch('/students/register', {
           method: 'POST',
@@ -126,7 +313,7 @@
         msg.textContent = 'Registration successful! You may close this page.';
         form.reset();
         codeInput.value = code;
-        preview.style.display = 'none';
+        clearPreview();
       } catch (err) {
         msg.className = 'msg error';
         msg.textContent = err.message || 'Something went wrong. Try again.';

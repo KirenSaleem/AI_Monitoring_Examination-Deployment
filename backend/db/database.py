@@ -2,7 +2,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 
-MONGO_URL = "mongodb+srv://bsai24030_db_user:k81mWGUrePwUemPN@cluster0.ihjyzsl.mongodb.net/examguard?retryWrites=true&w=majority&appName=Cluster0"
+MONGO_URL = "mongodb+srv://bsai24030_db_user:k81mWGUrePwUemPN@cluster0.ihjyzsl.mongodb.net/examguard?retryWrites=true&w=majority&appName=Cluster0&tls=true"
 DB_NAME = "examguard_db"
 TEACHERS_COLLECTION = "teachers"
 CLASSROOMS_COLLECTION = "classrooms"

@@ -41,6 +41,12 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>ExamGuard needs the camera for live exam monitoring.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ExamGuard needs photo library access to select profile images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ExamGuard may save photos to your library when needed.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
