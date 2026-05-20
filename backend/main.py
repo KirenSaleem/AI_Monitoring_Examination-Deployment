@@ -30,3 +30,15 @@ app.include_router(classroom_router)
 app.include_router(exam_router)
 app.include_router(exam_history_router)
 # app.include_router(monitoring_router)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        
+        host="0.0.0.0",
+        port=10000,
+        reload=False
+    )
