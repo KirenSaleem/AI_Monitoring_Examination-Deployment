@@ -14,6 +14,32 @@ ALERTS_DIR = Path("storage/alerts")
 ALERTS_URL_PREFIX = "/alerts"
 
 
+def _normalize_evidence_image_url(frame_path: str) -> str:
+    """
+    Convert any stored frame_path (local disk path or legacy API path) into
+    a public static URL: /alerts/{filename}.jpg
+    """
+    if not frame_path:
+        return ""
+
+    normalized = frame_path.replace("\\", "/").strip()
+
+    # Legacy/local paths often look like: storage/alerts/file.jpg
+    if "storage/alerts/" in normalized:
+        normalized = normalized.split("storage/alerts/")[-1]
+    elif normalized.startswith(f"{ALERTS_URL_PREFIX}/"):
+        remainder = normalized[len(ALERTS_URL_PREFIX) + 1 :]
+        if remainder.startswith("storage/alerts/"):
+            remainder = remainder[len("storage/alerts/") :]
+        normalized = remainder
+
+    file_name = Path(normalized).name
+    if not file_name:
+        return ""
+
+    return f"{ALERTS_URL_PREFIX}/{file_name}"
+
+
 def _serialize_notification(notification_doc: Dict[str, Any]) -> Dict[str, Any]:
     notification_doc.pop("_id", None)
     for key in ("created_at", "frame_captured_at"):
@@ -22,8 +48,10 @@ def _serialize_notification(notification_doc: Dict[str, Any]) -> Dict[str, Any]:
             notification_doc[key] = value.isoformat()
     frame_path = notification_doc.get("frame_path")
     if isinstance(frame_path, str) and frame_path:
-        file_name = Path(frame_path).name
-        notification_doc["evidence_image_url"] = f"{ALERTS_URL_PREFIX}/{file_name}"
+        evidence_url = _normalize_evidence_image_url(frame_path)
+        print(f"[Evidence DEBUG] Mongo frame_path={frame_path!r}")
+        print(f"[Evidence DEBUG] evidence_image_url={evidence_url!r}")
+        notification_doc["evidence_image_url"] = evidence_url
     return notification_doc
 
 
