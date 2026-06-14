@@ -43,13 +43,11 @@ print("Alerts dir:", alerts_dir)
 print("Alerts exists:", alerts_dir.exists())
 
 if alerts_dir.exists():
-    print("Alert files:", len(list(alerts_dir.glob("*.jpg"))))
+    files = list(alerts_dir.glob("*"))
+    print("Alert files:", len(files))
+    print("Files found:", [f.name for f in files[:20]])
 
 app.mount("/alerts", StaticFiles(directory=str(alerts_dir)), name="alerts")
-
-students_dir = backend_dir / "storage" / "students"
-students_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/students", StaticFiles(directory=str(students_dir)), name="students")
 
 
 @app.get("/")
