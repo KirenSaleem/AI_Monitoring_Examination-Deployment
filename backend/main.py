@@ -31,10 +31,20 @@ app.include_router(exam_router)
 app.include_router(exam_history_router)
 app.include_router(monitoring_router)
 
+
+
 backend_dir = Path(__file__).resolve().parent
 
 alerts_dir = backend_dir / "storage" / "alerts"
 alerts_dir.mkdir(parents=True, exist_ok=True)
+
+print("Backend dir:", backend_dir)
+print("Alerts dir:", alerts_dir)
+print("Alerts exists:", alerts_dir.exists())
+
+if alerts_dir.exists():
+    print("Alert files:", len(list(alerts_dir.glob("*.jpg"))))
+
 app.mount("/alerts", StaticFiles(directory=str(alerts_dir)), name="alerts")
 
 students_dir = backend_dir / "storage" / "students"
