@@ -29,7 +29,7 @@ class ApiService {
 
   Future<http.Response> _get(Uri url) async {
     try {
-      return await http.get(url).timeout(const Duration(seconds: 15));
+      return await http.get(url).timeout(const Duration(seconds: 30));
     } on SocketException catch (e) {
       if (kDebugMode) debugPrint('[ExamGuard] GET $url → $e');
       throw ApiException('Unable to connect to server. Please check your connection and try again.');
@@ -43,7 +43,7 @@ class ApiService {
     try {
       return await http
           .post(url, headers: {'Content-Type': 'application/json'}, body: body)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 30));
     } on SocketException catch (e) {
       if (kDebugMode) debugPrint('[ExamGuard] POST $url → $e');
       throw ApiException('Unable to connect to server. Please check your connection and try again.');
@@ -205,7 +205,7 @@ class ApiService {
         ..fields['session_id'] = sessionId
         ..files.add(await http.MultipartFile.fromPath('frame', frameFile.path));
 
-      final streamed = await request.send().timeout(const Duration(seconds: 30));
+      final streamed = await request.send().timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamed);
       _ensureSuccess(response);
       return jsonDecode(response.body) as Map<String, dynamic>;

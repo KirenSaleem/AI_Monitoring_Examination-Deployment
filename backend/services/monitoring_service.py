@@ -66,7 +66,7 @@ def check_monitoring_frame(frame_bytes: bytes, classroom_id: str, session_id: st
             "session_id": session_id,
             "alert_type": result["alert_type"],
             "confidence": result["confidence"],
-            "frame_path": str(frame_path),
+            "frame_path": f"{ALERTS_URL_PREFIX}/{frame_name}",
             "status": "unread",
             "created_at": captured_at,
             "frame_captured_at": captured_at,

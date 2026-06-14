@@ -50,7 +50,7 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
   double _currentZoom = 1.0;
   double _pinchBaseZoom = 1.0;
 
-  static const Duration _detectionInterval = Duration(seconds: 1);
+  static const Duration _detectionInterval = Duration(seconds: 5);
 
   bool get _isSessionActive => widget.sessionStatus.toLowerCase() == 'active';
 
@@ -260,7 +260,7 @@ class _MonitoringCameraScreenState extends State<MonitoringCameraScreen> {
                 Positioned(
                   top: 12,
                   right: 12,
-                  child: const AppBadge.ai(label: '~1 AI scan/s'),
+                  child: const AppBadge.ai(label: '~5 AI scan/s'),
                 ),
                 if (_isReady)
                   Positioned(

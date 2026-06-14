@@ -240,7 +240,7 @@ class _MonitoringDashboardState extends State<MonitoringDashboard> {
                 icon: Icons.videocam_rounded,
                 iconColor: AppColors.danger,
                 title: 'Open Live Camera',
-                subtitle: 'AI scans ~1/sec · pinch zoom · phone & book detection',
+                subtitle: 'AI scans ~5/sec · pinch zoom · phone & book detection',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
